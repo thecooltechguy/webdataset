@@ -42,6 +42,7 @@ class Pipe:
         **kw,
     ):
         """Create an IO Pipe."""
+        
         self.ignore_errors = ignore_errors
         self.ignore_status = [0] + ignore_status
         self.timeout = timeout
@@ -57,7 +58,7 @@ class Pipe:
             if self.stream is None:
                 raise ValueError(f"{args}: couldn't open")
         self.status = None
-
+        
     def __str__(self):
         return f"<Pipe {self.args}>"
 

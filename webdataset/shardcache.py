@@ -10,7 +10,8 @@ import sys
 import os.path
 import io
 import uuid
-
+from . import gopen
+from .handlers import reraise_exception
 
 def guess_shard(path):
     """Guess the shard from a given path."""
@@ -57,6 +58,7 @@ class CacheStream(io.RawIOBase):
         :param complete: indicate whether the stream was fully read (if not, the cache file is discarded)
         """
         self.stream.close()
+
         if self.cache is not None:
             self.cache.close()
             self.cache = None
@@ -91,7 +93,50 @@ class CacheStream(io.RawIOBase):
             self.close(complete=True)
         self.last = ("readinto", n)
         return n
-
+        
+def cacheable_url_opener(data, handler=reraise_exception, cache_dir="./data", cache_size=1e15, cache_name=guess_shard, verbose=False, **kw):
+    # Create the cache directory if it doesn't exist
+    if cache_dir is not None:
+        os.makedirs(cache_dir, exist_ok=True)
+    
+    for sample in data:
+        assert isinstance(sample, dict), sample
+        assert "url" in sample
+        url = sample["url"]
+        try:
+            # Check if caching is enabled
+            if cache_dir:
+                # Caching is enabled
+                
+                # Check if this url's shard has already been cached
+                cache_path = os.path.join(cache_dir, cache_name(url))
+                
+                if os.path.exists(cache_path):
+                    # This url's shard has been cached, so just open it and yield its stream
+                    if verbose:
+                        print("[opening cached", cache_path, "] ", file=sys.stderr, flush=True)
+                    yield dict(url=url, stream=open(cache_path, "rb"))
+                else:
+                    # create a gopen'ed stream of the url 
+                    # and use it to return a CacheStream of this url.
+                    stream = gopen.gopen(url, **kw)
+                    _cache = CacheStream(cache_path, stream, verbose=verbose)
+                    yield dict(url=url, stream=_cache)
+                    
+                if verbose:
+                    print(f"[finished {cache_path}]", file=sys.stderr, flush=True)
+            else:
+                # Caching is disabled, so return a regular gopen'ed stream of this url
+                stream = gopen.gopen(url, **kw)
+                sample.update(stream=stream)
+                yield sample
+        
+        except Exception as exn:
+            exn.args = exn.args + (url,)
+            if handler(exn):
+                continue
+            else:
+                break
 
 def cache_shards(urls, cache_dir="./data", cache_size=1e15, cache_name=guess_shard, verbose=False):
     """Implement shard caching.
@@ -116,13 +161,15 @@ def cache_shards(urls, cache_dir="./data", cache_size=1e15, cache_name=guess_sha
     for shard in urls:
         url = shard["url"]
         stream = shard["stream"]
+        
         cache_path = os.path.join(cache_dir, cache_name(url))
         if not os.path.exists(cache_path):
             _cache = CacheStream(cache_path, stream, verbose=verbose)
             yield dict(url=url, stream=_cache)
         else:
             if verbose:
-                print("[opening cached", cache_path, "]", file=sys.stderr, flush=True)
+                print("[opening cached", cache_path, "] ", file=sys.stderr, flush=True)
             yield dict(url=url, stream=open(cache_path, "rb"))
-    if verbose:
-        print(f"[finished {cache_path}]", file=sys.stderr, flush=True)
+        
+        if verbose:
+            print(f"[finished {cache_path}]", file=sys.stderr, flush=True)
