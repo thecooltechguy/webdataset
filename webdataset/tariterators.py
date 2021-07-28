@@ -89,6 +89,31 @@ def tar_file_iterator(fileobj, skip_meta=r"__[^/]*__($|/)", handler=reraise_exce
     :param skip_meta: regexp for keys that are skipped entirely (Default value = r"__[^/]*__($|/)")
 
     """
+    # stream = tarfile.open(fileobj=fileobj, mode="r|*")
+    # for tarinfo in stream:
+    #     fname = tarinfo.name
+    #     try:
+    #         if not tarinfo.isreg():
+    #             continue
+    #         if fname is None:
+    #             continue
+    #         if "/" not in fname and fname.startswith(meta_prefix) and fname.endswith(meta_suffix):
+    #             # skipping metadata for now
+    #             continue
+    #         if skip_meta is not None and re.match(skip_meta, fname):
+    #             continue
+    #         data = stream.extractfile(tarinfo).read()
+    #         result = dict(fname=fname, data=data)
+    #         result.update(info)
+    #         yield result
+    #     except Exception as exn:
+    #         if hasattr(exn, "args") and len(exn.args) > 0:
+    #             exn.args = (exn.args[0] + " @ " + str(fileobj),) + exn.args[1:]
+    #         if handler(exn):
+    #             continue
+    #         else:
+    #             break
+    # del stream
     with tarfile.open(fileobj=fileobj, mode="r|*") as stream:
         for tarinfo in stream:
             fname = tarinfo.name
